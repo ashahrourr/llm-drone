@@ -74,6 +74,16 @@ where you can `ros2 topic echo` it mid-flight.
 QoS, so **replacing it with PX4 SITL is a launch-file change, not a rewrite** —
 the topics, the frame conventions and the guard all stay put.
 
+**Against real PX4 firmware.** `px4/` builds PX4 v1.15.4 for arm64 and flies it
+over MAVLink — EKF2, commander, the real position controller. Verified on an
+Apple Silicon Mac: armed, climbed to 10.05 m, translated to N=20.3 E=15.4, then
+returned and landed. No Gazebo: PX4's built-in SIH integrates its own
+rigid-body model at 250 Hz, which is also what makes it run on arm64.
+
+```bash
+./px4/build.sh && ./px4/fly.sh
+```
+
 **Or standalone**, with no ROS at all, for quick iteration and for rendering:
 
 ```bash
@@ -91,6 +101,8 @@ Both paths import the same flight code.
 | `drone/planner.py` | LLM backend (OpenAI-compatible / Ollama) + an offline rule-based one |
 | `drone/viz.py` | 3-D animation and trajectory plots |
 | `ros2_ws/` | the three nodes, launch file, and a graph-level integration test |
+| `px4/` | build and fly real PX4 firmware over MAVLink ([notes](px4/README.md)) |
+| `drone/mavlink_io.py` | MAVLink vehicle + ground station |
 | `tests/` | 24 tests, checked against closed-form physics |
 
 ### The guard, over real topics
@@ -163,7 +175,7 @@ and cross the same guard, which makes the scripted one a useful control when you
 want to know whether a failure came from the model or from the flight code.
 
 ```bash
-pytest tests/ -q      # 24 passed
+pytest tests/ -q      # 29 passed
 ```
 
 ![Trajectory](docs/trajectory.png)
