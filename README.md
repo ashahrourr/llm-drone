@@ -50,9 +50,37 @@ before anything moves:
 The planner is also handed the vehicle's **actual** state after every command, so
 it replans against what happened rather than what it hoped would happen.
 
-## Everything under it is written from scratch
+## Two ways to run it
 
-No ROS, no Gazebo, no PX4. It is numpy and matplotlib, and it runs on a laptop.
+**As a ROS 2 graph**, which is how it would run on a real vehicle:
+
+```
+/drone/mission   (English)      →  planner_node
+/drone/command   (JSON)         →  guard_node      ← validates, clamps, rejects
+/drone/setpoint  (PoseStamped)  →  sim_node        ← 200 Hz dynamics + control
+/drone/odometry  (Odometry)     →  back to planner and guard
+```
+
+```bash
+ros2 launch drone_agent mission.launch.py \
+    mission:="take off to 8m, fly 15m north and 10m east, circle it, come home"
+```
+
+The guard is its own node on purpose: the safety rule is enforced by a process
+the planner cannot bypass, and every verdict is published on `/drone/guard`
+where you can `ros2 topic echo` it mid-flight.
+
+`sim_node` publishes `nav_msgs/Odometry` in NED with PX4's best-effort sensor
+QoS, so **replacing it with PX4 SITL is a launch-file change, not a rewrite** —
+the topics, the frame conventions and the guard all stay put.
+
+**Or standalone**, with no ROS at all, for quick iteration and for rendering:
+
+```bash
+python fly.py "take off to 6m and circle 10m north of here"
+```
+
+Both paths import the same flight code.
 
 | | |
 |---|---|
@@ -62,7 +90,24 @@ No ROS, no Gazebo, no PX4. It is numpy and matplotlib, and it runs on a laptop.
 | `drone/mission.py` | executes verbs, detects arrival, logs the trajectory |
 | `drone/planner.py` | LLM backend (OpenAI-compatible / Ollama) + an offline rule-based one |
 | `drone/viz.py` | 3-D animation and trajectory plots |
+| `ros2_ws/` | the three nodes, launch file, and a graph-level integration test |
 | `tests/` | 24 tests, checked against closed-form physics |
+
+### The guard, over real topics
+
+Publishing hostile commands straight at `/drone/command`:
+
+```
+goto → N=15.0 E=10.0 alt=8.0
+goto: clamped altitude→30.0m ceiling, waypoint→60.0m geofence
+rejected: unknown verb 'descend_below_ground'; expected one of takeoff, goto, orbit, hold, land, rtl
+rejected: north must be a number, got None
+rejected: no JSON object in model output
+```
+
+A 5 km waypoint at 900 m becomes a legal one on the fence at the ceiling. The
+three malformed commands never become setpoints. `ros2_ws/test_graph.sh`
+asserts all of it.
 
 ## Three bugs worth keeping
 
@@ -83,6 +128,21 @@ yawed 50° off heading. The attitude gains are now computed from the inertia
 (`kp = I·ω²`, `kd = 2ζ√(kp·I)`) instead of guessed.
 
 ## Run it
+
+No Ubuntu needed — the ROS 2 image runs natively on Apple Silicon:
+
+```bash
+docker run --rm -it -v "$PWD":/work -w /work/ros2_ws -e DRONE_REPO=/work \
+    ros:jazzy-ros-base bash
+# inside:
+source /opt/ros/jazzy/setup.bash && colcon build --packages-select drone_agent
+source install/setup.bash
+ros2 launch drone_agent mission.launch.py mission:="fly 20m north and come back"
+
+bash test_graph.sh      # graph-level integration test
+```
+
+Standalone, without ROS:
 
 ```bash
 pip install numpy matplotlib
@@ -110,5 +170,6 @@ pytest tests/ -q      # 24 passed
 
 <sub>Prior art: the LLM-commands-a-drone framing follows
 [pratikPhadte/LLM-controlled-drone](https://github.com/pratikPhadte/LLM-controlled-drone),
-which does it on ROS 2 + PX4 + Gazebo. This is an independent implementation
-built to run without them.</sub>
+which does it on ROS 2 + PX4 + Gazebo. This is an independent implementation:
+the dynamics, control, command schema and guard are written here, and the graph
+runs without PX4 or Gazebo so it works on any machine.</sub>
