@@ -17,6 +17,19 @@ rtl      ok   touchdown         N= -0.1 E=  0.0 alt=-0.0   2.5s
 
 ---
 
+## Stack
+
+| | |
+|---|---|
+| **ROS 2** (Jazzy) | Planner, guard and vehicle are three `rclpy` nodes with their own topics, launch file and QoS profiles. Built with `colcon`, runs natively on arm64. |
+| **PX4** (v1.15.4) | Built from source and flown for real — EKF2, commander, position controller, OFFBOARD mode. Armed, climbed to 10.05 m, translated, landed. |
+| **MAVLink** | Both ends: a vehicle that streams `HEARTBEAT` / `LOCAL_POSITION_NED` / `ATTITUDE` and accepts `SET_POSITION_TARGET_LOCAL_NED`, and a ground station that commands it. Works with QGroundControl. |
+| **Gazebo** | **Deliberately not used.** PX4 ships SIH, which integrates its own rigid-body model in-process at 250 Hz, so Gazebo only earns its cost when you need cameras, lidar or contact physics. It is also the reason this runs on Apple Silicon at all: PX4's and Gazebo's published images are amd64-only, while PX4 itself compiles cleanly for arm64. |
+
+The whole thing runs on a laptop — no Ubuntu box, no GPU.
+
+---
+
 ## The problem
 
 Language models are good at turning "survey the north field and come back" into a
@@ -104,7 +117,3 @@ Running real missions needs an LLM configured for `--llm`; without a key it uses
 the offline planner, so everything above runs with no network.
 
 ![Trajectory](docs/trajectory.png)
-
-<sub>Prior art: the LLM-commands-a-drone framing follows
-[pratikPhadte/LLM-controlled-drone](https://github.com/pratikPhadte/LLM-controlled-drone).
-This is an independent implementation.</sub>
