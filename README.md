@@ -95,6 +95,24 @@ N=20.3 E=15.4, returned, landed. No Gazebo needed: PX4's built-in SIH integrates
 its own rigid-body model at 250 Hz, which is also what makes it run on arm64.
 Notes in [px4/README.md](px4/README.md).
 
+## Three bugs worth keeping
+
+**The tilt signs were inverted.** Commanded east, it flew 268 m west. Rather than
+guess, the fix came from evaluating the rotation matrix: `+roll → +east`,
+`+pitch → −north`. There's a test pinning it now.
+
+**The mixer was degenerate.** Pitch and yaw were computed from the same rotor
+combination, so pitch moment was *always exactly zero* and the vehicle could
+only move on one axis. Re-deriving the layout from `r × F` made all four axes
+independent — `test_mixer_axes_are_independent` is the test that would have
+caught it.
+
+**The control loops were fighting.** Hand-tuned attitude gains put the inner
+loop at 3.35 rad/s and the outer at 1.18 rad/s. A cascade assumes the inner loop
+is roughly a decade faster; at 3× they interfere, and the drone oscillated and
+yawed 50° off heading. The attitude gains are now computed from the inertia
+(`kp = I·ω²`, `kd = 2ζ√(kp·I)`) instead of guessed.
+
 ## What's in it
 
 | | |
